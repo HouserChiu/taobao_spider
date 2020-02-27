@@ -1,5 +1,5 @@
 import time
-
+import re
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 from selenium.common.exceptions import ElementNotInteractableException, TimeoutException
@@ -47,13 +47,30 @@ def search():
         password[0].send_keys('your password')
         login.click()
         time.sleep(5)
-
+        total = wait.until(
+            EC.presence_of_element_located((By.CSS_SELECTOR, '#mainsrp-pager > div > div > div > div.total')))
         get_products()
+        return total.text
     except ElementNotInteractableException:
         return search()
     except TimeoutException:
         return search()
 
+def next_page(page_number):
+    try:
+        input = wait.until(
+            EC.presence_of_element_located((By.CSS_SELECTOR, '#mainsrp-pager > div > div > div > div.form > input'))
+        )
+        submit = wait.until(EC.element_to_be_clickable(
+            (By.CSS_SELECTOR, '#mainsrp-pager > div > div > div > div.form > span.btn.J_Submit')))
+        input.clear()
+        input.send_keys(page_number)
+        submit.click()
+        wait.until(EC.text_to_be_present_in_element(
+            (By.CSS_SELECTOR, '#mainsrp-pager > div > div > div > ul > li.item.active > span'), str(page_number)))
+        get_products()
+    except TimeoutException:
+        next_page(page_number)
 
 def get_products():
     wait.until(EC.presence_of_all_elements_located((By.CSS_SELECTOR, '#mainsrp-itemlist .items .item')))
@@ -83,7 +100,9 @@ def save_to_mongo(result):
 
 def main():
     total = search()
-    print(total)
+    total = int(re.compile('(\d+)').search(total).group(1))
+    for i in range(2, total + 1):
+        next_page(i)
     browser.close()
 
 
