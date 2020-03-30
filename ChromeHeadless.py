@@ -9,6 +9,7 @@ from selenium.webdriver.support import expected_conditions as EC
 from pyquery import PyQuery as pq
 from config import *
 import pymongo
+from lxml import etree
 
 client = pymongo.MongoClient(MONGO_URL)
 db = client[MONGO_DB]
@@ -73,21 +74,26 @@ def next_page(page_number):
         next_page(page_number)
 
 def get_products():
+    #等待信息加载出来
     wait.until(EC.presence_of_all_elements_located((By.CSS_SELECTOR, '#mainsrp-itemlist .items .item')))
-    html = browser.page_source
-    doc = pq(html)
-    items = doc('#mainsrp-itemlist .items .item').items()
-    for item in items:
-        product = {
-            'image': item.find('.pic .img').attr('src'),
-            'price': item.find('.price').text(),
-            'deal': item.find('.deal-cnt').text()[:-3],
-            'title': item.find('.title').text(),
-            'shop': item.find('.shop').text(),
-            'location': item.find('.location').text()
+    html = etree.HTML(browser.page_source)
+    pros = html.xpath("//div[@class='grid g-clearfix']/div/div")
+    infos = []
+    for pro in pros:
+        price = pro.xpath(".//div[contains(@class,'price')]/strong/text()")
+        titles = pro.xpath(".//div[contains(@class,'title')]/a/text()")
+        name = ''.join(titles)
+        title = re.sub(r'\s', '', name)
+        shop= pro.xpath(".//a[contains(@class,'shopname')]/span[2]/text()")
+
+        info = {
+            'price':price,
+            'title':title,
+            'shop':shop
         }
-        print(product)
-        save_to_mongo(product)
+
+        infos.append(info)
+    print(infos)
 
 
 def save_to_mongo(result):
@@ -98,13 +104,9 @@ def save_to_mongo(result):
         print('存储到MONGODB失败', result)
 
 
-def main():
-    total = search()
-    total = int(re.compile('(\d+)').search(total).group(1))
-    for i in range(2, total + 1):
+if __name__ == '__main__':
+    total_text = search()
+    total_num = int(re.search('\d+', total_text).group(0))
+    for i in range(2, total_num + 1):
         next_page(i)
     browser.close()
-
-
-if __name__ == '__main__':
-    main()
